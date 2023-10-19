@@ -6,6 +6,8 @@
 #include <thread>
 #include <vector>
 #include <map>
+#include <utime.h>
+
 #include "libs/uuid_v4.h"
 #include "libs/httplib.h"
 
@@ -13,7 +15,6 @@
 
 int main()
 {
-
 	const std::string upload_directory = "./uploads/";
 	if (!httplib::detail::is_dir(upload_directory.c_str()))
 	{
@@ -59,11 +60,26 @@ int main()
 	svr.Get("/file/:uuid", [&](const httplib::Request &req, httplib::Response &res)
 	{
         std::string file_name = req.path_params.at("uuid");
-		std::cout << "Retrive: " << file_name << std::endl;
 
         std::string file_path = upload_directory + file_name;
 
-       fb::send_file(file_path, res, httplib::detail::find_content_type(file_name, mimetype_addons, "application/octet-stream"));
+		const long now = time(nullptr);
+		const long last_accessed = fb::get_file_last_accessed(file_path);
+		std::cout << now << " - " << "Fetching: " << file_name << ", idling for " << now - last_accessed << " seconds" << std::endl;
+		if (last_accessed == 0 || (now - last_accessed) > 60 * 60 * 24 * 7)
+		{
+			res.status = 404;
+			res.set_content("File not found", "text/plain");
+			return;
+		}
+		if (now - last_accessed > 60)
+		{
+			const struct utimbuf a{now, now};
+			utime(file_path.c_str(), &a);
+		}
+
+		fb::send_file(file_path, res, httplib::detail::find_content_type(file_name, mimetype_addons, "application/octet-stream"));
+
 	});
 
 	std::cout << "Server started at localhost:8080" << std::endl;

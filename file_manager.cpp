@@ -36,4 +36,14 @@ namespace fb
 		return EXIT_SUCCESS;
 	}
 
+	time_t get_file_last_accessed(const std::string &file_path)
+	{
+		struct stat result;
+		if (stat(file_path.c_str(), &result) == 0)
+		{
+			return result.st_atime;
+		}
+		return 0;
+	}
+
 } // namespace fb

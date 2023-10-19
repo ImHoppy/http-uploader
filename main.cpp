@@ -13,6 +13,9 @@
 
 #include "fb_cdn.h"
 
+const unsigned int MAX_UPLOAD_SIZE = 1024 * 1024 * 1024; // 1 gigabyte (GB)
+const unsigned int MAX_AGES = 60 * 60 * 24 * 7; // 1 week
+
 int main()
 {
 	const std::string upload_directory = "./uploads/";
@@ -37,6 +40,12 @@ int main()
 		{
 			res.status = 400;
 			res.set_content("No file uploaded.", "text/plain");
+			return;
+		}
+		if (req.get_file_value("file").content.length() > MAX_UPLOAD_SIZE)
+		{
+			res.status = 400;
+			res.set_content("File is too large.", "text/plain");
 			return;
 		}
 		auto file = req.get_file_value("file");
@@ -66,7 +75,7 @@ int main()
 		const long now = time(nullptr);
 		const long last_accessed = fb::get_file_last_accessed(file_path);
 		std::cout << now << " - " << "Fetching: " << file_name << ", idling for " << now - last_accessed << " seconds" << std::endl;
-		if (last_accessed == 0 || (now - last_accessed) > 60 * 60 * 24 * 7)
+		if (last_accessed == 0 || (now - last_accessed) > MAX_AGES)
 		{
 			res.status = 404;
 			res.set_content("File not found", "text/plain");

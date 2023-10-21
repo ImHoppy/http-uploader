@@ -12,9 +12,7 @@ WORKDIR /app
 COPY srcs/ srcs/
 COPY Makefile Makefile
 
-WORKDIR /app/build
-
-RUN make -f ../Makefile
+RUN make
 
 
 # Run
@@ -29,8 +27,9 @@ RUN addgroup -S runner && adduser -S runner -G runner
 USER runner
 
 COPY --chown=runner:runner --from=build \
-    ./app/build/app \
+    ./app/fb_cdn \
     ./app/
+
 ENTRYPOINT [ "./app/fb_cdn" ]
 
-expose 8080
+EXPOSE 8080

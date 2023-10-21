@@ -2,7 +2,7 @@ NAME		=	fb_cdn
 
 CC			=	clang++
 
-CFLAGS		=	-Wall -Wextra -Werror -std=c++11 -I. -march=native
+CFLAGS		=	-Wall -Wextra -Werror -std=c++11 -I. -march=haswell
 ifeq ($(DEBUG), 1)
 	CFLAGS		+= -DDEBUG_LOG=1
 endif

@@ -91,7 +91,7 @@ int main()
 
 	});
 
-	std::cout << "Server started at localhost:8080" << std::endl;
+	std::cout << "Server started at 0.0.0:8080" << std::endl;
 	svr.listen("0.0.0.0", 8080);
 	return 0;
 }

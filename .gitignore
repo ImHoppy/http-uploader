@@ -1,2 +1,4 @@
 uploads/*
 fb_cdn
+*.o
+*.d

@@ -2,15 +2,15 @@ NAME		=	fb_cdn
 
 CC			=	clang++
 
-CFLAGS		=	-Wall -Wextra -Werror -std=c++11 -I. -march=haswell
+CFLAGS		=	-Wall -Wextra -Werror -std=c++11 -Isrcs -march=haswell
 ifeq ($(DEBUG), 1)
 	CFLAGS		+= -DDEBUG_LOG=1
 endif
 
 LDFLAGS		=	-lpthread
 
-SRCS		=	 main.cpp \
-file_manager.cpp
+SRCS		=	 srcs/main.cpp \
+srcs/file_manager.cpp
 
 OBJS		=	$(SRCS:.cpp=.o)
 DEPS		=	$(OBJS:.o=.d)

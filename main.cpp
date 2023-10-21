@@ -36,19 +36,19 @@ int main()
 
 	svr.Post("/upload", [&](const httplib::Request &req, httplib::Response &res)
 	{
-		if (!req.has_file("file"))
+		if (!req.files.size())
 		{
 			res.status = 400;
 			res.set_content("No file uploaded.", "text/plain");
 			return;
 		}
-		if (req.get_file_value("file").content.length() > MAX_UPLOAD_SIZE)
+		auto file = req.files.begin()->second;
+		if (file.content.length() > MAX_UPLOAD_SIZE)
 		{
 			res.status = 400;
 			res.set_content("File is too large.", "text/plain");
 			return;
 		}
-		auto file = req.get_file_value("file");
 		const std::string &filename = file.filename;
 
 		std::string uuid = uuidGenerator.getUUID().str();
@@ -92,6 +92,6 @@ int main()
 	});
 
 	std::cout << "Server started at localhost:8080" << std::endl;
-	svr.listen("localhost", 8080);
+	svr.listen("0.0.0.0", 8080);
 	return 0;
 }

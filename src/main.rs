@@ -13,7 +13,6 @@ use warp::{
 async fn main() {
     let upload_route = warp::post()
         .and(warp::path("upload"))
-        .and(warp::multipart::form())
         .and(warp::multipart::form().max_length(5_000_000))
         .and_then(upload);
 

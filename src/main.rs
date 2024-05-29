@@ -10,6 +10,8 @@ use warp::{
     filters::multipart::FormData, http::StatusCode, reply, serve, Buf, Filter, Rejection, Reply,
 };
 
+const URL_HOST: &str = "http://localhost:8080";
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("RUST_LOG", "debug");
@@ -51,7 +53,13 @@ async fn upload(form: FormData) -> Result<impl Reply, Rejection> {
     let parts: Vec<_> = form
         .and_then(|mut part| async move {
             let id = Uuid::new_v4();
-            let extension = part.filename().unwrap().split('.').last().unwrap();
+            let extension = part
+                .filename()
+                .unwrap()
+                .split('.')
+                .last()
+                .unwrap()
+                .to_string();
 
             let mut file = File::create(format!("./uploads/{}.{}", id, extension))
                 .await
@@ -66,7 +74,7 @@ async fn upload(form: FormData) -> Result<impl Reply, Rejection> {
                 file.write_all(&data.chunk()).await.unwrap();
             }
 
-            Ok(id.to_string())
+            Ok((id.to_string(), extension))
         })
         .try_collect()
         .await
@@ -76,7 +84,11 @@ async fn upload(form: FormData) -> Result<impl Reply, Rejection> {
         })
         .unwrap();
 
-    Ok(parts.join("\n"))
+    let urls: Vec<String> = parts
+        .iter()
+        .map(|(file, extension)| format!("{URL_HOST}/file/{file}.{extension}"))
+        .collect();
+    Ok(urls.join("\n"))
 }
 
 async fn get_file(file_name: String) -> Result<impl Reply, Rejection> {
@@ -97,23 +109,6 @@ async fn get_file(file_name: String) -> Result<impl Reply, Rejection> {
 
     Ok(reply::with_header(buf, "content-type", content_type))
 }
-
-/*
-fn save_file(
-    name: &str,
-    filename: &str,
-    content_type: String,
-    data: &[u8],
-) -> Result<(), io::Error> {
-    let upload_dir = "./uploads";
-    let filepath = format!("{}/{}", upload_dir, filename);
-    // Create the upload directory if it doesn't exist
-    fs::create_dir_all(Path::new(upload_dir))?;
-    // Write the data to the file
-    fs::write(filepath, data)?;
-    Ok(())
-}
-*/
 
 // Custom rejection handler that maps rejections into responses.
 async fn handle_rejection(err: Rejection) -> Result<impl Reply, std::convert::Infallible> {

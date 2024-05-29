@@ -22,15 +22,37 @@ async fn main() {
 }
 
 async fn upload(form: FormData) -> Result<impl Reply, Rejection> {
-    let parts: Vec<Part> = form.try_collect().await.map_err(|e| {
-        eprintln!("form error: {}", e);
-        warp::reject::reject()
-    })?;
-    
-    for part in parts {
-        println!("name = {}", part.name());
+    let id = Uuid::new_v4();
+
+    let mut parts: Vec<Part> = form
+        .try_collect()
+        .await
+        .map_err(|e| {
+            eprintln!("form error: {}", e);
+            warp::reject::reject()
+        })
+        .unwrap();
+
+    let part = parts.get_mut(0).unwrap();
+
+    let extension = part.filename().unwrap().split('.').last().unwrap();
+
+    let mut file = File::create(format!("./uploads/{}.{}", id, extension))
+        .await
+        .map_err(|e| {
+            eprintln!("file error: {}", e);
+            warp::reject::reject()
+        })?;
+
+    if let Some(data) = part.data().await {
+        let data = data.unwrap();
+        file.write_all(&data.chunk()).await.unwrap();
     }
 
+    info!("Upload: {}", id);
+
+    Ok(id.to_string())
+}
     Ok("success")
 }
 

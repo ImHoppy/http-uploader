@@ -1,3 +1,5 @@
+mod mimetype;
+
 use futures::TryStreamExt;
 use log::*;
 use tokio::fs::File;
@@ -5,9 +7,7 @@ use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 use warp::{
-    filters::multipart::{FormData, Part},
-    http::StatusCode,
-    reply, serve, Buf, Filter, Rejection, Reply,
+    filters::multipart::FormData, http::StatusCode, reply, serve, Buf, Filter, Rejection, Reply,
 };
 
 #[tokio::main]
@@ -90,7 +90,12 @@ async fn get_file(file_name: String) -> Result<impl Reply, Rejection> {
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).await.unwrap();
 
-    Ok(buf)
+    let content_type = mimetype::find_mimetype(
+        file_name.split('.').last().unwrap(),
+        "application/octet-stream",
+    );
+
+    Ok(reply::with_header(buf, "content-type", content_type))
 }
 
 /*

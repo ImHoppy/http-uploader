@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta name="darkreader-lock">
+	<title>UWU</title>
+	<style>
+		body {
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			height: 100vh;
+
+			background-color: #131516;
+		}
+
+		.uwu {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+
+			height: 200px;
+			width: 400px;
+			background-color: pink;
+			border-radius: 10px;
+		}
+	</style>
+
+	<script type="module">
+		const file = document.getElementById('file');
+		const upload = document.getElementById('upload');
+		const result = document.getElementById('result');
+
+		upload.addEventListener('click', () => {
+			const formData = new FormData();
+
+			for (let i = 0; i < file.files.length; i++) {
+				formData.append('file', file.files[i]);
+			}
+
+			fetch('/upload', {
+				method: 'POST',
+				body: formData
+			})
+				.then(response => response.text())
+				.then(data => {
+					result.innerHTML = data;
+				})
+				.catch(error => {
+					console.error(error);
+				});
+		});
+	</script>
+</head>
+
+
+<body>
+
+	<div class='uwu'>
+		<h1>UWU</h1>
+		<div>
+			<input multiple type="file" id="file" />
+			<button id="upload">Upload</button>
+		</div>
+		<div id="result"></div>
+	</div>
+</body>
+
+</html>

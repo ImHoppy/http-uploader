@@ -1,6 +1,7 @@
 use futures::TryStreamExt;
 use log::*;
 use tokio::fs::File;
+use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 use warp::{
@@ -11,6 +12,7 @@ use warp::{
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    std::env::set_var("RUST_LOG", "debug");
     pretty_env_logger::formatted_timed_builder();
 
     let port = std::env::args()
@@ -20,13 +22,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let upload_file_route = warp::post()
         .and(warp::path("upload"))
-        .and(warp::multipart::form().max_length(5_000_000))
+        .and(warp::multipart::form().max_length(200_000_000)) // 200 MB
         .and_then(upload);
 
     let get_file_route = warp::path!("file" / String).and_then(get_file);
 
+    let static_route = warp::path("static").and(warp::fs::dir("static"));
+
     let routes = upload_file_route
         .or(get_file_route)
+        .or(static_route)
         .recover(handle_rejection);
 
     info!("Listening on port: {}", port);
@@ -43,9 +48,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn upload(form: FormData) -> Result<impl Reply, Rejection> {
-    let id = Uuid::new_v4();
+    let parts: Vec<_> = form
+        .and_then(|mut part| async move {
+            let id = Uuid::new_v4();
+            let extension = part.filename().unwrap().split('.').last().unwrap();
 
-    let mut parts: Vec<Part> = form
+            let mut file = File::create(format!("./uploads/{}.{}", id, extension))
+                .await
+                .map_err(|e| {
+                    trace!("Error creating file: {}", e);
+                    warp::reject::reject()
+                })
+                .unwrap();
+
+            while let Some(data) = part.data().await {
+                let data = data.unwrap();
+                file.write_all(&data.chunk()).await.unwrap();
+            }
+
+            Ok(id.to_string())
+        })
         .try_collect()
         .await
         .map_err(|e| {
@@ -54,25 +76,7 @@ async fn upload(form: FormData) -> Result<impl Reply, Rejection> {
         })
         .unwrap();
 
-    let part = parts.get_mut(0).unwrap();
-
-    let extension = part.filename().unwrap().split('.').last().unwrap();
-
-    let mut file = File::create(format!("./uploads/{}.{}", id, extension))
-        .await
-        .map_err(|e| {
-            trace!("Error creating file: {}", e);
-            warp::reject::reject()
-        })?;
-
-    if let Some(data) = part.data().await {
-        let data = data.unwrap();
-        file.write_all(&data.chunk()).await.unwrap();
-    }
-
-    info!("Upload: {}", id);
-
-    Ok(id.to_string())
+    Ok(parts.join("\n"))
 }
 
 async fn get_file(file_name: String) -> Result<impl Reply, Rejection> {
@@ -112,6 +116,11 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, std::convert::In
         Ok(reply::with_status("NOT_FOUND", StatusCode::NOT_FOUND))
     } else if err.find::<warp::reject::PayloadTooLarge>().is_some() {
         Ok(reply::with_status("BAD_REQUEST", StatusCode::BAD_REQUEST))
+    } else if let Some(_) = err.find::<warp::reject::MethodNotAllowed>() {
+        Ok(reply::with_status(
+            "METHOD_NOT_ALLOWED",
+            StatusCode::METHOD_NOT_ALLOWED,
+        ))
     } else {
         eprintln!("unhandled rejection: {:?}", err);
         Ok(reply::with_status(

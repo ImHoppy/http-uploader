@@ -29,6 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .or(get_file_route)
         .recover(handle_rejection);
 
+    info!("Listening on port: {}", port);
     let (_addr, server) = serve(routes).bind_with_graceful_shutdown(([0, 0, 0, 0], port), async {
         tokio::signal::ctrl_c()
             .await
@@ -60,7 +61,7 @@ async fn upload(form: FormData) -> Result<impl Reply, Rejection> {
     let mut file = File::create(format!("./uploads/{}.{}", id, extension))
         .await
         .map_err(|e| {
-            eprintln!("file error: {}", e);
+            trace!("Error creating file: {}", e);
             warp::reject::reject()
         })?;
 
@@ -75,7 +76,17 @@ async fn upload(form: FormData) -> Result<impl Reply, Rejection> {
 }
 
 async fn get_file(file_name: String) -> Result<impl Reply, Rejection> {
-    Ok("success")
+    let path = format!("./uploads/{}", file_name);
+
+    let mut file = File::open(path).await.map_err(|e| {
+        trace!("Error opening file: {}", e);
+        warp::reject::reject()
+    })?;
+
+    let mut buf = Vec::new();
+    file.read_to_end(&mut buf).await.unwrap();
+
+    Ok(buf)
 }
 
 /*

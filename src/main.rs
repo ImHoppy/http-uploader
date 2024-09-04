@@ -1,5 +1,8 @@
 mod mimetype;
 
+use std::path::Path;
+
+use filetime::set_file_atime;
 use futures::TryStreamExt;
 use log::*;
 use tokio::fs::File;
@@ -92,12 +95,16 @@ async fn upload(form: FormData) -> Result<impl Reply, Rejection> {
 }
 
 async fn get_file(file_name: String) -> Result<impl Reply, Rejection> {
-    let path = format!("./uploads/{}", file_name);
+    let path_str = format!("./uploads/{}", file_name);
+
+    let path = Path::new(&path_str);
 
     let mut file = File::open(path).await.map_err(|e| {
         trace!("Error opening file: {}", e);
         warp::reject::reject()
     })?;
+
+    set_file_atime(path, filetime::FileTime::now()).unwrap();
 
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).await.unwrap();

@@ -9,6 +9,7 @@ use log::*;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
+use url::Url;
 use uuid::Uuid;
 use warp::{filters::multipart::FormData, http::StatusCode, reply, Buf, Rejection, Reply};
 
@@ -52,7 +53,19 @@ pub async fn upload(form: FormData, args: Args) -> Result<impl Reply, Rejection>
 
     let urls: Vec<String> = parts
         .iter()
-        .map(|(file, extension)| format!("{}/file/{}.{}", args.url_host, file, extension))
+        .map(|(file, extension)| {
+            let pathname = format!("/file/{}.{}", file, extension);
+            let url = Url::parse(&args.url_host)?.join(&pathname)?;
+
+            Ok(url.to_string())
+        })
+        .filter_map(|url: Result<String, url::ParseError>| match url {
+            Ok(url) => Some(url),
+            Err(e) => {
+                error!("url: {}", e);
+                None
+            }
+        })
         .collect();
     Ok(urls.join("\n"))
 }

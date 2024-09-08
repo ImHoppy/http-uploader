@@ -31,15 +31,36 @@ pub struct Args {
         help = "The URL host"
     )]
     url_host: String,
+
+    #[arg(short, long, default_value = "false", help = "Enable verbose logging")]
+    verbose: bool,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    pretty_env_logger::formatted_timed_builder();
-
     let args = Args::parse();
 
-    info!("Listening on: {} {}", args.host, args.port);
+    let mut builder = pretty_env_logger::formatted_timed_builder();
+    builder
+        .filter_level(if args.verbose {
+            log::LevelFilter::Debug
+        } else {
+            log::LevelFilter::Info
+        })
+        .init();
+
+    info!("Listening on: {}:{}", args.host, args.port);
+
+    if !std::path::Path::new(&args.upload_dir).exists() {
+        info!("Create upload directory: {}", args.upload_dir);
+        match std::fs::create_dir(&args.upload_dir) {
+            Ok(_) => (),
+            Err(e) => {
+                error!("Failed to create upload directory: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
 
     let (_addr, server) =
         serve(routers(args.clone())).bind_with_graceful_shutdown((args.host, args.port), async {

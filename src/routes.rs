@@ -1,16 +1,28 @@
 use crate::handlers::handle_rejection;
 use crate::handlers::{get_file, upload};
-
-use warp::Filter;
-
 use crate::Args;
+
+use log::*;
+use warp::Filter;
 
 fn with_args(
     args: Args,
 ) -> impl Filter<Extract = (Args,), Error = std::convert::Infallible> + Clone {
     warp::any().map(move || args.clone())
 }
+
 pub fn routers(args: Args) -> impl Filter<Extract = impl warp::Reply> + Clone {
+    let log = warp::log::custom(|info| {
+        info!(
+            "{} {} {} {}",
+            info.remote_addr()
+                .map_or("unknown".to_string(), |addr| addr.ip().to_string()),
+            info.method(),
+            info.path(),
+            info.status()
+        );
+    });
+
     // POST /upload
     let upload = warp::post()
         .and(warp::path("upload"))
@@ -30,7 +42,8 @@ pub fn routers(args: Args) -> impl Filter<Extract = impl warp::Reply> + Clone {
     let routers = upload
         .or(get_file)
         .or(static_files)
-        .recover(handle_rejection); // Specify the type of Rejection
+        .recover(handle_rejection)
+        .with(log);
 
     routers
 }

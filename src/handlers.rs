@@ -14,7 +14,7 @@ use warp::{filters::multipart::FormData, http::StatusCode, reply, Buf, Rejection
 
 pub async fn upload(form: FormData, args: Args) -> Result<impl Reply, Rejection> {
     let parts: Vec<_> = form
-        .and_then(|mut part| async move {
+        .and_then(move |mut part| {
             let id = Uuid::new_v4();
             let extension = part
                 .filename()
@@ -24,20 +24,23 @@ pub async fn upload(form: FormData, args: Args) -> Result<impl Reply, Rejection>
                 .unwrap()
                 .to_string();
 
-            let mut file = File::create(format!("./uploads/{}.{}", id, extension))
-                .await
-                .map_err(|e| {
-                    trace!("Error creating file: {}", e);
-                    warp::reject::reject()
-                })
-                .unwrap();
+            let upload_dir = args.upload_dir.clone();
+            async move {
+                let mut file = File::create(format!("{}/{}.{}", upload_dir, id, extension))
+                    .await
+                    .map_err(|e| {
+                        trace!("Error creating file: {}", e);
+                        warp::reject::reject()
+                    })
+                    .unwrap();
 
-            while let Some(data) = part.data().await {
-                let data = data.unwrap();
-                file.write_all(&data.chunk()).await.unwrap();
+                while let Some(data) = part.data().await {
+                    let data = data.unwrap();
+                    file.write_all(&data.chunk()).await.unwrap();
+                }
+
+                Ok((id.to_string(), extension))
             }
-
-            Ok((id.to_string(), extension))
         })
         .try_collect()
         .await
@@ -54,8 +57,8 @@ pub async fn upload(form: FormData, args: Args) -> Result<impl Reply, Rejection>
     Ok(urls.join("\n"))
 }
 
-pub async fn get_file(file_name: String, _args: Args) -> Result<impl Reply, Rejection> {
-    let path_str = format!("./uploads/{}", file_name);
+pub async fn get_file(file_name: String, args: Args) -> Result<impl Reply, Rejection> {
+    let path_str = format!("{}/{}", args.upload_dir, file_name);
 
     let path = Path::new(&path_str);
 

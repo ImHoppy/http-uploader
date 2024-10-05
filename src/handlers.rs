@@ -14,60 +14,51 @@ use uuid::Uuid;
 use warp::{filters::multipart::FormData, http::StatusCode, reply, Buf, Rejection, Reply};
 
 pub async fn upload(form: FormData, args: Args) -> Result<impl Reply, Rejection> {
-    let parts: Vec<_> = form
-        .and_then(move |mut part| {
-            let id = Uuid::new_v4();
-            let extension = part
-                .filename()
-                .unwrap()
-                .split('.')
-                .last()
-                .unwrap()
-                .to_string();
+    let parts: Vec<_> = form.try_collect().await.map_err(|e| {
+        debug!("form error: {}", e);
+        warp::reject::reject()
+    })?;
 
-            let upload_dir = args.upload_dir.clone();
-            async move {
-                let mut file = File::create(format!("{}/{}.{}", upload_dir, id, extension))
-                    .await
-                    .map_err(|e| {
-                        trace!("Error creating file: {}", e);
-                        warp::reject::reject()
-                    })
-                    .unwrap();
+    if parts.len() != 1 {
+        return Err(warp::reject::reject());
+    }
 
-                while let Some(data) = part.data().await {
-                    let data = data.unwrap();
-                    file.write_all(&data.chunk()).await.unwrap();
-                }
+    let mut part = parts.into_iter().next().unwrap();
+    let id = Uuid::new_v4();
+    let extension = part
+        .filename()
+        .unwrap_or("default")
+        .split('.')
+        .last()
+        .unwrap_or("png")
+        .to_string();
 
-                Ok((id.to_string(), extension))
-            }
-        })
-        .try_collect()
+    let upload_dir = args.upload_dir.clone();
+    let mut file = File::create(format!("{}/{}.{}", upload_dir, id, extension))
         .await
         .map_err(|e| {
-            eprintln!("form error: {}", e);
+            trace!("Error creating file: {}", e);
             warp::reject::reject()
-        })
-        .unwrap();
+        })?;
 
-    let urls: Vec<String> = parts
-        .iter()
-        .map(|(file, extension)| {
-            let pathname = format!("/file/{}.{}", file, extension);
-            let url = Url::parse(&args.url_host)?.join(&pathname)?;
+    while let Some(data) = part.data().await {
+        let data = data.unwrap();
+        file.write_all(&data.chunk()).await.unwrap();
+    }
 
-            Ok(url.to_string())
-        })
-        .filter_map(|url: Result<String, url::ParseError>| match url {
-            Ok(url) => Some(url),
-            Err(e) => {
-                error!("url: {}", e);
-                None
-            }
-        })
-        .collect();
-    Ok(urls.join("\n"))
+    let pathname = format!("/file/{}.{}", id, extension);
+    let url = Url::parse(&args.url_host)
+        .map_err(|e| {
+            trace!("Error parsing url: {}", e);
+            warp::reject::reject()
+        })?
+        .join(&pathname)
+        .map_err(|e| {
+            trace!("Error parsing url: {}", e);
+            warp::reject::reject()
+        })?;
+
+    Ok(url.to_string())
 }
 
 pub async fn get_file(file_name: String, args: Args) -> Result<impl Reply, Rejection> {

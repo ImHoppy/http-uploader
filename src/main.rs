@@ -1,6 +1,7 @@
 mod handlers;
 mod mimetype;
 mod routes;
+mod schedule;
 
 use routes::routers;
 
@@ -34,6 +35,13 @@ pub struct Args {
 
     #[arg(short, long, default_value = "false", help = "Enable verbose logging")]
     verbose: bool,
+
+    #[arg(
+        long = "lifetime",
+        default_value = "0",
+        help = "The life time of the file in seconds before it gets deleted, 0 means never delete",
+    )]
+    file_lifetime: u64,
 }
 
 #[tokio::main]
@@ -60,6 +68,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 std::process::exit(1);
             }
         }
+    }
+
+    if args.file_lifetime > 0 {
+        schedule::create_schedule_thread(args.clone());
     }
 
     let (_addr, server) =

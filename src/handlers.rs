@@ -1,6 +1,7 @@
 use crate::mimetype;
 use crate::Args;
 
+use std::fs::create_dir;
 use std::path::Path;
 
 use filetime::set_file_atime;
@@ -11,11 +12,23 @@ use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 use url::Url;
 use uuid::Uuid;
+use warp::filters::path::Tail;
+use warp::reject;
 use warp::{filters::multipart::FormData, http::StatusCode, reply, Buf, Rejection, Reply};
 
-pub async fn upload(form: FormData, args: Args) -> Result<impl Reply, Rejection> {
+#[derive(Debug)]
+struct BadRequest;
+
+impl reject::Reject for BadRequest {}
+
+pub async fn upload(form: FormData, folder_param: String, args: Args) -> Result<impl Reply, Rejection> {
+    if !folder_param.chars().all(|c: char| c.is_ascii_alphabetic()) || folder_param.len() > 16 {
+        return Err(warp::reject::custom(BadRequest));
+    }
+    let folder_param = folder_param.to_ascii_lowercase();
+
     let parts: Vec<_> = form
-        .and_then(move |mut part| {
+        .and_then(move |mut part|  {
             let id = Uuid::new_v4();
             let extension = part
                 .filename()
@@ -25,9 +38,14 @@ pub async fn upload(form: FormData, args: Args) -> Result<impl Reply, Rejection>
                 .unwrap()
                 .to_string();
 
+            let file_name: String = format!("{}/{}.{}", folder_param, id, extension);
+
             let upload_dir = args.upload_dir.clone();
+            if folder_param.len() > 0 {
+                create_dir(format!("{}/{}", upload_dir, folder_param)).unwrap_or_default();
+            }
             async move {
-                let mut file = File::create(format!("{}/{}.{}", upload_dir, id, extension))
+                let mut file = File::create(format!("{}/{}", upload_dir, file_name))
                     .await
                     .map_err(|e| {
                         trace!("Error creating file: {}", e);
@@ -40,7 +58,7 @@ pub async fn upload(form: FormData, args: Args) -> Result<impl Reply, Rejection>
                     file.write_all(&data.chunk()).await.unwrap();
                 }
 
-                Ok((id.to_string(), extension))
+                Ok(file_name)
             }
         })
         .try_collect()
@@ -53,8 +71,8 @@ pub async fn upload(form: FormData, args: Args) -> Result<impl Reply, Rejection>
 
     let urls: Vec<String> = parts
         .iter()
-        .map(|(file, extension)| {
-            let pathname = format!("/file/{}.{}", file, extension);
+        .map(|file_name| {
+            let pathname = format!("/file/{}", file_name);
             let url = Url::parse(&args.url_host)?.join(&pathname)?;
 
             Ok(url.to_string())
@@ -70,14 +88,14 @@ pub async fn upload(form: FormData, args: Args) -> Result<impl Reply, Rejection>
     Ok(urls.join("\n"))
 }
 
-pub async fn get_file(file_name: String, args: Args) -> Result<impl Reply, Rejection> {
-    let path_str = format!("{}/{}", args.upload_dir, file_name);
+pub async fn get_file(file_name: Tail, args: Args) -> Result<impl Reply, Rejection> {
+    let path_str = format!("{}/{}", args.upload_dir, file_name.as_str());
 
     let path = Path::new(&path_str);
-
+    println!("path: {:?}", path);
     let mut file = File::open(path).await.map_err(|e| {
         trace!("Error opening file: {}", e);
-        warp::reject::reject()
+        warp::reject::not_found()
     })?;
 
     set_file_atime(path, filetime::FileTime::now()).unwrap();
@@ -86,7 +104,7 @@ pub async fn get_file(file_name: String, args: Args) -> Result<impl Reply, Rejec
     file.read_to_end(&mut buf).await.unwrap();
 
     let content_type = mimetype::find_mimetype(
-        file_name.split('.').last().unwrap(),
+        file_name.as_str().split('.').last().unwrap(),
         "application/octet-stream",
     );
 
@@ -97,7 +115,7 @@ pub async fn get_file(file_name: String, args: Args) -> Result<impl Reply, Rejec
 pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, std::convert::Infallible> {
     if err.is_not_found() {
         Ok(reply::with_status("NOT_FOUND", StatusCode::NOT_FOUND))
-    } else if err.find::<warp::reject::PayloadTooLarge>().is_some() {
+    } else if err.find::<warp::reject::PayloadTooLarge>().is_some() || err.find::<BadRequest>().is_some() {
         Ok(reply::with_status("BAD_REQUEST", StatusCode::BAD_REQUEST))
     } else if let Some(_) = err.find::<warp::reject::MethodNotAllowed>() {
         Ok(reply::with_status(

@@ -39,7 +39,7 @@ pub struct Args {
     #[arg(
         long = "lifetime",
         default_value = "0",
-        help = "The life time of the file in seconds before it gets deleted, 0 means never delete",
+        help = "The life time of the file in seconds before it gets deleted, 0 means never delete"
     )]
     file_lifetime: u64,
 }

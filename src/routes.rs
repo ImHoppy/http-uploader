@@ -27,12 +27,13 @@ pub fn routers(args: Args) -> impl Filter<Extract = impl warp::Reply> + Clone {
     let upload = warp::post()
         .and(warp::path("upload"))
         .and(warp::multipart::form().max_length(200_000_000)) // 200 MB
+        .and(warp::path::param::<String>())
         .and(with_args(args.clone()))
         .and_then(upload);
 
     // GET /file/:file_name
     let get_file = warp::path("file")
-        .and(warp::path::param())
+        .and(warp::path::tail())
         .and(with_args(args.clone()))
         .and_then(get_file);
 

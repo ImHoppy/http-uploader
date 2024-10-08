@@ -67,7 +67,7 @@ pub async fn upload(form: FormData, folder_param: Option<String>, args: Args) ->
         .try_collect()
         .await
         .map_err(|e| {
-            eprintln!("form error: {}", e);
+            error!("form error: {}", e);
             warp::reject::reject()
         })
         .unwrap();
@@ -95,7 +95,6 @@ pub async fn get_file(file_name: Tail, args: Args) -> Result<impl Reply, Rejecti
     let path_str = format!("{}/{}", args.upload_dir, file_name.as_str());
 
     let path = Path::new(&path_str);
-    println!("path: {:?}", path);
     let mut file = File::open(path).await.map_err(|e| {
         trace!("Error opening file: {}", e);
         warp::reject::not_found()
@@ -126,7 +125,7 @@ pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, std::convert
             StatusCode::METHOD_NOT_ALLOWED,
         ))
     } else {
-        eprintln!("unhandled rejection: {:?}", err);
+        error!("unhandled rejection: {:?}", err);
         Ok(reply::with_status(
             "INTERNAL_SERVER_ERROR",
             StatusCode::INTERNAL_SERVER_ERROR,

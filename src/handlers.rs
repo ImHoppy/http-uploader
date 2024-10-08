@@ -21,11 +21,13 @@ struct BadRequest;
 
 impl reject::Reject for BadRequest {}
 
-pub async fn upload(form: FormData, folder_param: String, args: Args) -> Result<impl Reply, Rejection> {
-    if !folder_param.chars().all(|c: char| c.is_ascii_alphabetic()) || folder_param.len() > 16 {
-        return Err(warp::reject::custom(BadRequest));
+pub async fn upload(form: FormData, folder_param: Option<String>, args: Args) -> Result<impl Reply, Rejection> {
+    if let Some(folder_param) = &folder_param {
+        if !folder_param.chars().all(|c: char| c.is_ascii_alphabetic()) || folder_param.len() > 16 {
+            return Err(warp::reject::custom(BadRequest));
+        }
     }
-    let folder_param = folder_param.to_ascii_lowercase();
+    let folder_param = folder_param.map_or("".to_string(), |param| param.to_ascii_lowercase());
 
     let parts: Vec<_> = form
         .and_then(move |mut part|  {
@@ -38,9 +40,10 @@ pub async fn upload(form: FormData, folder_param: String, args: Args) -> Result<
                 .unwrap()
                 .to_string();
 
-            let file_name: String = format!("{}/{}.{}", folder_param, id, extension);
+            let file_name = format!("{}/{}.{}", folder_param, id, extension);
 
             let upload_dir = args.upload_dir.clone();
+
             if folder_param.len() > 0 {
                 create_dir(format!("{}/{}", upload_dir, folder_param)).unwrap_or_default();
             }

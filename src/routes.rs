@@ -23,11 +23,16 @@ pub fn routers(args: Args) -> impl Filter<Extract = impl warp::Reply> + Clone {
         );
     });
 
+    let optional_param = warp::path::param::<String>()
+    .map(Some)
+    .or_else(|_| async {
+        Ok::<(Option<String>,), std::convert::Infallible>((None,))
+    });
     // POST /upload
     let upload = warp::post()
         .and(warp::path("upload"))
         .and(warp::multipart::form().max_length(200_000_000)) // 200 MB
-        .and(warp::path::param::<String>())
+        .and(optional_param)
         .and(with_args(args.clone()))
         .and_then(upload);
 

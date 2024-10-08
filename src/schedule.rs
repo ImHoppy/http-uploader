@@ -44,6 +44,9 @@ fn get_files(upload_dir: String) -> Vec<(File, PathBuf)> {
 					if let Ok(file) = File::open(&path) {
 						files.push((file, path));
 					}
+				} else if path.is_dir() {
+					let sub_files = get_files(path.to_string_lossy().into_owned());
+					files.extend(sub_files);
 				}
 			}
 		}
